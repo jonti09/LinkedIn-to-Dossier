@@ -28,11 +28,11 @@ The script outputs a JSON array where each element has the following shape:
 ## Usage
 
 ```bash
-# Run with visible Firefox window (saves to scrapped/linked-in/<date-time>.json automatically)
+# Run in headless mode by default (saves to scrapped/linked-in/<date-time>.json automatically)
 ./scraper.py
 
-# Run in headless mode (saves to scrapped/linked-in/<date-time>.json automatically)
-./scraper.py --headless
+# Run with a visible Firefox GUI window
+./scraper.py --no-headless
 
 # Scrape only the first 5 listings on the subsequent page
 ./scraper.py --limit 5
@@ -41,7 +41,7 @@ The script outputs a JSON array where each element has the following shape:
 ./scraper.py --show-all-index 1
 
 # Explicitly specify a custom output file path
-./scraper.py --headless -o scrapped/linked-in/custom.json
+./scraper.py -o scrapped/linked-in/custom.json
 
 # Explicitly specify a Firefox profile directory or a cookies.json file
 ./scraper.py --profile ~/.config/mozilla/firefox/0csfnlo2.default-release

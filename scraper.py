@@ -337,7 +337,7 @@ def scrape_linkedin_jobs(
     url: str = "https://www.linkedin.com/jobs/",
     profile_dir: Optional[str] = None,
     cookies_file: Optional[str] = None,
-    headless: bool = False,
+    headless: bool = True,
     limit: Optional[int] = None,
     show_all_index: int = 0,
     verbose: bool = True,
@@ -586,8 +586,17 @@ def main() -> int:
     )
     parser.add_argument(
         "--headless",
+        dest="headless",
         action="store_true",
-        help="Run Firefox in headless mode (default: opens visible Firefox window if DISPLAY is available)",
+        default=True,
+        help="Run Firefox in headless mode (default: True)",
+    )
+    parser.add_argument(
+        "--no-headless",
+        "--headed",
+        dest="headless",
+        action="store_false",
+        help="Run Firefox with a visible GUI window",
     )
     parser.add_argument(
         "--limit",
