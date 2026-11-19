@@ -297,6 +297,7 @@ def sync_jobs_to_dossier(
                 f"[{idx}/{len(jobs)}] Skipping '{job.get('title')} · {job.get('company')}' "
                 f"(already in Dossier with status '{existing_status}': {existing_link})"
             )
+            job.pop("dossierError", None)
             job["dossierApplicationId"] = existing_id
             job["dossierUrl"] = existing_link
             job["dossierStatus"] = f"already_exists ({existing_status})"
@@ -307,6 +308,7 @@ def sync_jobs_to_dossier(
             res = dossier.create_draft_application(job, wait_for_ai=wait_for_ai, log_fn=log)
             app_id = res.get("application_id")
             link = res.get("link")
+            job.pop("dossierError", None)
             job["dossierDraftId"] = res.get("draft_id")
             job["dossierApplicationId"] = app_id
             job["dossierUrl"] = link

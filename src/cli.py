@@ -9,10 +9,10 @@ import sys
 
 try:
     from .dossier import sync_jobs_to_dossier
-    from .scraper import parse_salary_amount, scrape_linkedin_jobs
+    from .scraper import extract_min_posted_salary, meets_min_salary, parse_salary_amount, scrape_linkedin_jobs
 except ImportError:
     from dossier import sync_jobs_to_dossier
-    from scraper import parse_salary_amount, scrape_linkedin_jobs
+    from scraper import extract_min_posted_salary, meets_min_salary, parse_salary_amount, scrape_linkedin_jobs
 
 
 def get_project_root() -> str:
@@ -71,10 +71,18 @@ def main() -> int:
         help="Which 'Show all' section button to click (0 = first section, 1 = second section, etc.)",
     )
     parser.add_argument(
+        "--from-json",
+        "--input",
+        "-i",
+        dest="from_json",
+        default=None,
+        help="Path to an existing scraped JSON file to sync/retry adding into Dossier without re-scraping Firefox",
+    )
+    parser.add_argument(
         "--output",
         "-o",
         default=None,
-        help="Output JSON file path (default: scrapped/<YYYY-MM-DD_HH-MM-SS>.json)",
+        help="Output JSON file path (default: scrapped/<YYYY-MM-DD_HH-MM-SS>.json, or updates the --from-json file in-place)",
     )
     parser.add_argument(
         "--dossier-url",
@@ -112,16 +120,47 @@ def main() -> int:
         if min_salary_val is None:
             parser.error(f"Invalid --min-salary value: {args.min_salary!r} (expected number like 90000 or 90k)")
 
-    jobs = scrape_linkedin_jobs(
-        url=args.url,
-        profile_dir=args.profile,
-        cookies_file=args.cookies,
-        headless=headless,
-        limit=args.limit,
-        min_salary=min_salary_val,
-        show_all_index=args.show_all_index,
-        verbose=not args.quiet,
-    )
+    if args.from_json:
+        if not os.path.exists(args.from_json):
+            parser.error(f"Input JSON file not found: {args.from_json}")
+        if not args.quiet:
+            sys.stderr.write(f"[linkedin-scrapper] Loading scraped listings from {args.from_json}...\n")
+        with open(args.from_json, "r", encoding="utf-8") as f:
+            loaded = json.load(f)
+        if isinstance(loaded, dict):
+            jobs = [loaded]
+        elif isinstance(loaded, list):
+            jobs = loaded
+        else:
+            parser.error(f"Expected JSON array or object in {args.from_json}")
+
+        if min_salary_val is not None:
+            filtered = []
+            for j in jobs:
+                sal = j.get("salaryRange")
+                if meets_min_salary(sal, min_salary_val):
+                    filtered.append(j)
+                elif not args.quiet:
+                    p_min = extract_min_posted_salary(sal)
+                    sys.stderr.write(
+                        f"[linkedin-scrapper] Filtering out '{j.get('title')} · {j.get('company')}' "
+                        f"(posted salary '{sal}' [min={p_min:g}] < {min_salary_val:g})\n"
+                    )
+            jobs = filtered
+
+        if args.limit and args.limit > 0:
+            jobs = jobs[:args.limit]
+    else:
+        jobs = scrape_linkedin_jobs(
+            url=args.url,
+            profile_dir=args.profile,
+            cookies_file=args.cookies,
+            headless=headless,
+            limit=args.limit,
+            min_salary=min_salary_val,
+            show_all_index=args.show_all_index,
+            verbose=not args.quiet,
+        )
 
     if not args.no_dossier:
         sync_jobs_to_dossier(
@@ -135,7 +174,7 @@ def main() -> int:
     formatted = json.dumps(jobs, indent=2, ensure_ascii=False)
     project_root = get_project_root()
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    default_out = os.path.join(project_root, "scrapped", f"{timestamp}.json")
+    default_out = args.from_json if args.from_json else os.path.join(project_root, "scrapped", f"{timestamp}.json")
     output_path = args.output if args.output else default_out
 
     out_dir = os.path.dirname(os.path.abspath(output_path))

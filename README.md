@@ -47,12 +47,16 @@ uv run scrape
 
 # Test with the first 3 listings only
 uv run scrape --limit 3
+
+# Safely re-run / retry failed Dossier drafts from an existing scraped JSON file
+uv run scrape --from-json scrapped/2026-11-19_16-13-10.json
 ```
 
 ## Common Options
 
 | Flag | Description |
 | :--- | :--- |
+| `-i, --from-json <path>` | Load listings from an existing scraped JSON file and add any missing/failed entries to Dossier without re-scraping Firefox. |
 | `--limit <N>` | Only process the first `N` listings on the page. |
 | `--min-salary <X>` | Only include postings where the lower bound `P` of the posted salary range `P - Q` is `>= X` (e.g. `100000` or `100k`). Postings without a listed salary are kept. |
 | `--show-all-index <N>` | Choose which "Show all" section on LinkedIn Jobs to open (`0` = first section, `1` = second, etc.). |

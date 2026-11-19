@@ -78,6 +78,9 @@ uv run src/cli.py
 # Test with a small limit
 uv run scrape --limit 3
 
+# Re-sync an existing scraped JSON file to Dossier (skips already-added drafts and retries failed entries)
+uv run scrape --from-json scrapped/<YYYY-MM-DD_HH-MM-SS>.json
+
 # Scrape only (skip Dossier MCP sync)
 uv run scrape --no-dossier
 
