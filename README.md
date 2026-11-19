@@ -31,6 +31,7 @@ uv run scrape --limit 3
 | :--- | :--- |
 | `--limit <N>` | Only process the first `N` listings on the page. |
 | `--show-all-index <N>` | Choose which "Show all" section on LinkedIn Jobs to open (`0` = first section, `1` = second, etc.). |
+| `--dossier-url <url>` | Override the Dossier base URL (default: `localhost:3000`). |
 | `--no-dossier` | Only scrape listings to `scrapped/<date-time>.json` without creating drafts in Dossier. |
 | `--no-wait-ai` | Queue AI drafts in Dossier and exit immediately without waiting for generation to finish. |
 | `--force-dossier` | Create a new draft in Dossier even if the job already exists. |

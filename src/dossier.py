@@ -11,18 +11,40 @@ import urllib.request
 from typing import Any, Dict, List, Optional
 
 
+def _normalize_base_url(base_url: str) -> str:
+    base_url = (base_url or "localhost:3000").strip().rstrip("/")
+    if not base_url.startswith(("http://", "https://")):
+        base_url = f"http://{base_url}"
+    return base_url
+
+
 class DossierClient:
-    """Interacts with Dossier's MCP endpoint (http://localhost:3000/api/mcp)."""
+    """Interacts with Dossier's MCP endpoint."""
 
     def __init__(
         self,
-        mcp_url: str = "http://localhost:3000/api/mcp",
-        token_url: str = "http://localhost:3000/api/oauth/token",
+        base_url: str = "localhost:3000",
+        mcp_url: Optional[str] = None,
+        token_url: Optional[str] = None,
     ):
-        self.mcp_url = mcp_url
-        self.token_url = token_url
+        self.base_url = _normalize_base_url(base_url)
+        self.mcp_url = mcp_url or f"{self.base_url}/api/mcp"
+        self.token_url = token_url or f"{self.base_url}/api/oauth/token"
         self.token = self._load_or_refresh_token()
         self.profile = None
+
+    def format_app_link(self, link: Optional[str], app_id: Optional[str] = None) -> Optional[str]:
+        if not link and app_id:
+            return f"{self.base_url}/applications/{app_id}"
+        if not isinstance(link, str) or not link:
+            return link
+        try:
+            parsed = urllib.parse.urlparse(link)
+            if parsed.path:
+                return f"{self.base_url}{parsed.path}"
+        except Exception:
+            pass
+        return link.replace("http://127.0.0.1:3000", self.base_url).replace("http://localhost:3000", self.base_url)
 
     def _load_or_refresh_token(self) -> str:
         auth_dir = os.path.expanduser("~/.mcp-auth/mcp-remote-v1")
@@ -167,12 +189,11 @@ class DossierClient:
                 log_fn(f"      [Dossier AI] {step}...")
                 last_step = step
             if status == "done":
-                link = chk.get("link")
-                if isinstance(link, str):
-                    link = link.replace("http://127.0.0.1:3000", "http://localhost:3000")
+                app_id = chk.get("application_id")
+                link = self.format_app_link(chk.get("link"), app_id)
                 return {
                     "draft_id": draft_id,
-                    "application_id": chk.get("application_id"),
+                    "application_id": app_id,
                     "link": link,
                     "status": "Draft",
                 }
@@ -244,6 +265,7 @@ def find_existing_application(
 
 def sync_jobs_to_dossier(
     jobs: List[Dict[str, Any]],
+    dossier_url: str = "localhost:3000",
     force: bool = False,
     wait_for_ai: bool = True,
     verbose: bool = True,
@@ -254,7 +276,7 @@ def sync_jobs_to_dossier(
             sys.stderr.flush()
 
     try:
-        dossier = DossierClient()
+        dossier = DossierClient(base_url=dossier_url)
     except Exception as e:
         log(f"Skipping Dossier sync (MCP client init failed: {e})")
         return
@@ -270,9 +292,7 @@ def sync_jobs_to_dossier(
         if not force and matched_app is not None:
             existing_status = matched_app.get("status", "Draft")
             existing_id = matched_app.get("id")
-            existing_link = matched_app.get("link")
-            if isinstance(existing_link, str):
-                existing_link = existing_link.replace("http://127.0.0.1:3000", "http://localhost:3000")
+            existing_link = dossier.format_app_link(matched_app.get("link"), existing_id)
             log(
                 f"[{idx}/{len(jobs)}] Skipping '{job.get('title')} · {job.get('company')}' "
                 f"(already in Dossier with status '{existing_status}': {existing_link})"

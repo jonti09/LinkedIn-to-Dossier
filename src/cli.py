@@ -72,6 +72,11 @@ def main() -> int:
         help="Output JSON file path (default: scrapped/<YYYY-MM-DD_HH-MM-SS>.json)",
     )
     parser.add_argument(
+        "--dossier-url",
+        default="localhost:3000",
+        help="Dossier base URL or host:port (default: localhost:3000)",
+    )
+    parser.add_argument(
         "--no-dossier",
         action="store_true",
         help="Skip syncing scraped jobs to Dossier",
@@ -109,6 +114,7 @@ def main() -> int:
     if not args.no_dossier:
         sync_jobs_to_dossier(
             jobs,
+            dossier_url=args.dossier_url,
             force=args.force_dossier,
             wait_for_ai=not args.no_wait_ai,
             verbose=not args.quiet,

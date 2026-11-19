@@ -36,7 +36,7 @@ All source modules live directly under `src/` (flat module layout configured in 
   - Checks existing applications (`list_applications`) by normalized `apply`/`postingLink` URL, LinkedIn numeric Job ID, and `(company, role)` pair so duplicate drafts are never created.
   - Calls Dossier's built-in AI tool (`draft_application` followed by polling `check_draft`) rather than `save_application`, ensuring Dossier's configured local/remote AI model tailors the resume, cover letter, and requirement match breakdown.
   - Passes `apply` as `posting_url` so the Dossier application link points directly to the actual application portal.
-  - Normalizes Dossier links in JSON output to `http://localhost:3000/applications/<id>`.
+  - Uses `--dossier-url` (defaulting to `localhost:3000`, normalized to `http://localhost:3000`) for both MCP/OAuth requests and `dossierUrl` links in the JSON output.
 
 ## Output JSON Schema
 
