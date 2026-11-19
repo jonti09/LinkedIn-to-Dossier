@@ -9,10 +9,10 @@ import sys
 
 try:
     from .dossier import sync_jobs_to_dossier
-    from .scraper import scrape_linkedin_jobs
+    from .scraper import parse_salary_amount, scrape_linkedin_jobs
 except ImportError:
     from dossier import sync_jobs_to_dossier
-    from scraper import scrape_linkedin_jobs
+    from scraper import parse_salary_amount, scrape_linkedin_jobs
 
 
 def get_project_root() -> str:
@@ -60,6 +60,11 @@ def main() -> int:
         help="Maximum number of job listings to scrape from the subsequent page",
     )
     parser.add_argument(
+        "--min-salary",
+        default=None,
+        help="Minimum base salary P required when a salary range 'P - Q' is posted (e.g. 90000 or 90k). Postings without a salary are kept.",
+    )
+    parser.add_argument(
         "--show-all-index",
         type=int,
         default=0,
@@ -101,12 +106,19 @@ def main() -> int:
     args = parser.parse_args()
     headless = args.headless or not bool(os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"))
 
+    min_salary_val = None
+    if args.min_salary is not None:
+        min_salary_val = parse_salary_amount(args.min_salary)
+        if min_salary_val is None:
+            parser.error(f"Invalid --min-salary value: {args.min_salary!r} (expected number like 90000 or 90k)")
+
     jobs = scrape_linkedin_jobs(
         url=args.url,
         profile_dir=args.profile,
         cookies_file=args.cookies,
         headless=headless,
         limit=args.limit,
+        min_salary=min_salary_val,
         show_all_index=args.show_all_index,
         verbose=not args.quiet,
     )

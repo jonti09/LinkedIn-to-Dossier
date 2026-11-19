@@ -2,6 +2,7 @@
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -15,6 +16,74 @@ try:
 except ImportError:
     from cookies import find_default_firefox_profile, load_cookies_from_sqlite
     from marionette import MarionetteClient, find_free_port
+
+
+def parse_salary_amount(raw: str) -> Optional[float]:
+    """
+    Parse a salary figure string (e.g. '115000', '115k', '£115,000', '115.5K') into a float value.
+    If the number is < 1000 without an explicit 'k'/'m' suffix (e.g. '100' when someone passes '--min-salary 100k'),
+    it returns the literal float unless 'k' or 'm' is present.
+    """
+    if not raw:
+        return None
+    s = str(raw).strip().lower().replace(",", "")
+    m = re.search(r"(\d+(?:\.\d+)?)\s*([km])?\b", s)
+    if not m:
+        return None
+    val = float(m.group(1))
+    suffix = m.group(2)
+    if suffix == "k":
+        val *= 1000.0
+    elif suffix == "m":
+        val *= 1_000_000.0
+    return val
+
+
+def extract_min_posted_salary(salary_range: Optional[str]) -> Optional[float]:
+    """
+    Extract the lower bound P from a posted salary range string 'P - Q' (or single salary figure 'P').
+    Examples:
+      '115K GBP/yr - 145K GBP/yr' -> 115000.0
+      '£120,000 - £168,000'       -> 120000.0
+      '$100K/yr - $150K/yr'       -> 100000.0
+      '£90 - £110k'               -> 90000.0
+      'up to £135k'               -> 135000.0
+      None                        -> None
+    """
+    if not salary_range or not isinstance(salary_range, str):
+        return None
+    cleaned = salary_range.replace(",", "")
+    matches = list(re.finditer(r"(\d+(?:\.\d+)?)\s*([kKmM])?", cleaned))
+    if not matches:
+        return None
+    first = matches[0]
+    val = float(first.group(1))
+    suffix = (first.group(2) or "").lower()
+    # Handle shorthand ranges like "£90 - £110k" where only the upper bound has the 'k' suffix
+    if not suffix and len(matches) > 1 and val < 1000:
+        second_suffix = (matches[1].group(2) or "").lower()
+        if second_suffix == "k":
+            suffix = "k"
+    if suffix == "k":
+        val *= 1000.0
+    elif suffix == "m":
+        val *= 1_000_000.0
+    return val
+
+
+def meets_min_salary(salary_range: Optional[str], min_salary: Optional[float]) -> bool:
+    """
+    Return True if:
+    - min_salary filter is not set, OR
+    - no salary is posted on the listing (salary_range is None/unparseable), OR
+    - the posted lower bound P >= min_salary.
+    """
+    if min_salary is None or min_salary <= 0:
+        return True
+    posted_min = extract_min_posted_salary(salary_range)
+    if posted_min is None:
+        return True
+    return posted_min >= min_salary
 
 
 EXTRACT_JOB_JS = r"""
@@ -190,6 +259,7 @@ def scrape_linkedin_jobs(
     cookies_file: Optional[str] = None,
     headless: bool = True,
     limit: Optional[int] = None,
+    min_salary: Optional[float] = None,
     show_all_index: int = 0,
     verbose: bool = True,
 ) -> List[Dict[str, Any]]:
@@ -398,6 +468,14 @@ def scrape_linkedin_jobs(
             )
             time.sleep(0.15)
             job_data = client.execute_script(EXTRACT_JOB_JS, [jid])
+            salary_str = job_data.get("salaryRange")
+            if not meets_min_salary(salary_str, min_salary):
+                posted_min = extract_min_posted_salary(salary_str)
+                log(
+                    f"      -> Filtering out '{job_data.get('title')} · {job_data.get('company')}' "
+                    f"(posted salary '{salary_str}' [min={posted_min:g}] < {min_salary:g})"
+                )
+                continue
             results.append(job_data)
 
         client.close()

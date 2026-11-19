@@ -54,6 +54,7 @@ uv run scrape --limit 3
 | Flag | Description |
 | :--- | :--- |
 | `--limit <N>` | Only process the first `N` listings on the page. |
+| `--min-salary <X>` | Only include postings where the lower bound `P` of the posted salary range `P - Q` is `>= X` (e.g. `100000` or `100k`). Postings without a listed salary are kept. |
 | `--show-all-index <N>` | Choose which "Show all" section on LinkedIn Jobs to open (`0` = first section, `1` = second, etc.). |
 | `--dossier-url <url>` | Override the Dossier base URL (default: `localhost:3000`). |
 | `--no-dossier` | Only scrape listings to `scrapped/<date-time>.json` without creating drafts in Dossier. |
