@@ -1,4 +1,5 @@
-"""CLI entry point for linkedin_scrapper."""
+#!/usr/bin/env python3
+"""CLI entry point for job scraping & Dossier draft application pipeline."""
 
 import argparse
 from datetime import datetime
@@ -6,13 +7,17 @@ import json
 import os
 import sys
 
-from .dossier import sync_jobs_to_dossier
-from .scraper import scrape_linkedin_jobs
+try:
+    from .dossier import sync_jobs_to_dossier
+    from .scraper import scrape_linkedin_jobs
+except ImportError:
+    from dossier import sync_jobs_to_dossier
+    from scraper import scrape_linkedin_jobs
 
 
 def get_project_root() -> str:
-    """Resolve the repository root directory from src/linkedin_scrapper/cli.py."""
-    return os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    """Resolve the repository root directory from src/cli.py."""
+    return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 def main() -> int:

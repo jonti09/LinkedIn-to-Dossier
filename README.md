@@ -1,31 +1,30 @@
-# LinkedIn Jobs Scraper & Dossier Pipeline (`linkedin-scrapper`)
+# Job Scraper & Dossier Pipeline
 
-A zero-dependency Python 3 package that scrapes job listings from LinkedIn via Firefox and automatically creates AI-tailored **Draft** applications in **Dossier** via MCP with job links pointing to the actual application URLs.
+A zero-dependency Python 3 project that scrapes job listings via Firefox and automatically creates AI-tailored **Draft** applications in **Dossier** via MCP with job links pointing to the actual application URLs.
 
 ## Project Structure
 
 ```text
-linkedin-scrapper/
+.
 ├── pyproject.toml
 ├── README.md
 └── src/
-    └── linkedin_scrapper/
-        ├── __init__.py
-        ├── __main__.py     # Module entry point (`python3 -m linkedin_scrapper`)
-        ├── cli.py          # CLI argument parsing and workflow orchestration
-        ├── cookies.py      # Firefox profile discovery and SQLite cookie loader
-        ├── dossier.py      # Dossier MCP client, duplicate checking, and AI draft creation
-        ├── marionette.py   # Pure-Python Firefox Marionette client
-        └── scraper.py      # LinkedIn Jobs browser navigation and DOM extraction
+    ├── __init__.py
+    ├── __main__.py     # Entry point (`python3 src` or `python3 -m src`)
+    ├── cli.py          # CLI argument parsing and workflow orchestration
+    ├── cookies.py      # Firefox profile discovery and SQLite cookie loader
+    ├── dossier.py      # Dossier MCP client, duplicate checking, and AI draft creation
+    ├── marionette.py   # Pure-Python Firefox Marionette client
+    └── scraper.py      # Job board browser navigation and DOM extraction
 ```
 
 ## Workflow
 
-1. **Firefox Automation** ([`cookies.py`](src/linkedin_scrapper/cookies.py), [`marionette.py`](src/linkedin_scrapper/marionette.py)): Opens `https://www.linkedin.com/jobs/` using cookies from your local Firefox profile (`cookies.sqlite`) or a cookies JSON file.
-2. **Find Jobs** ([`scraper.py`](src/linkedin_scrapper/scraper.py)): Clicks **"Show all"** on your recommended job collection.
-3. **Scrape Detail** ([`scraper.py`](src/linkedin_scrapper/scraper.py)): Extracts the listing title, company, clean description, salary range, remote flag, posting date, recruiter contact URL, and direct application link (resolving external ATS redirects like Ashby, Greenhouse, Lever, etc.).
-4. **Save Scraped Data** ([`cli.py`](src/linkedin_scrapper/cli.py)): Writes JSON output to `scrapped/<YYYY-MM-DD_HH-MM-SS>.json`.
-5. **Dossier MCP Integration** ([`dossier.py`](src/linkedin_scrapper/dossier.py)):
+1. **Firefox Automation** ([`src/cookies.py`](src/cookies.py), [`src/marionette.py`](src/marionette.py)): Opens `https://www.linkedin.com/jobs/` using cookies from your local Firefox profile (`cookies.sqlite`) or a cookies JSON file.
+2. **Find Jobs** ([`src/scraper.py`](src/scraper.py)): Clicks **"Show all"** on your recommended job collection.
+3. **Scrape Detail** ([`src/scraper.py`](src/scraper.py)): Extracts the listing title, company, clean description, salary range, remote flag, posting date, recruiter contact URL, and direct application link (resolving external ATS redirects like Ashby, Greenhouse, Lever, etc.).
+4. **Save Scraped Data** ([`src/cli.py`](src/cli.py)): Writes JSON output to `scrapped/<YYYY-MM-DD_HH-MM-SS>.json`.
+5. **Dossier MCP Integration** ([`src/dossier.py`](src/dossier.py)):
    - Connects to Dossier (`http://localhost:3000/api/mcp`) via its authorized MCP tokens (`~/.mcp-auth/mcp-remote-v1`).
    - Checks existing Dossier applications (including existing **Draft** entries) by URL, LinkedIn job ID, and company + role to avoid duplicates.
    - Calls `draft_application` + `check_draft` so **Dossier's own built-in AI** generates the tailored resume, cover letter, and requirement match breakdown.
@@ -53,23 +52,20 @@ Each scraped job produces an object structured as follows:
 }
 ```
 
-## Installation & Usage
+## Usage
 
 ```bash
-cd /home/saber/Projects/Job/linkedin-scrapper
-
-# Optional: install in editable mode into your virtualenv
-pip install -e .
-
-# Or run directly via PYTHONPATH
-PYTHONPATH=src python3 -m linkedin_scrapper
+# Run directly
+python3 src/cli.py
+# or
+python3 src
 
 # Scrape only first 3 listings
-PYTHONPATH=src python3 -m linkedin_scrapper --limit 3
+python3 src/cli.py --limit 3
 
 # Run with visible Firefox GUI window
-PYTHONPATH=src python3 -m linkedin_scrapper --no-headless
+python3 src/cli.py --no-headless
 
 # Only scrape to scrapped/<date-time>.json without creating applications in Dossier
-PYTHONPATH=src python3 -m linkedin_scrapper --no-dossier
+python3 src/cli.py --no-dossier
 ```

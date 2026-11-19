@@ -3,16 +3,16 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "linkedin-scrapper"
+name = "job-dossier-pipeline"
 version = "0.1.0"
-description = "Scrape LinkedIn job listings via Firefox and create AI-tailored Draft applications in Dossier via MCP."
+description = "Scrape job listings via Firefox and create AI-tailored Draft applications in Dossier via MCP."
 readme = "README.md"
 requires-python = ">=3.9"
 dependencies = []
 
 [project.scripts]
-linkedin-scrapper = "linkedin_scrapper.cli:main"
-scrape-to-dossier = "linkedin_scrapper.cli:main"
+scrape-to-dossier = "cli:main"
 
-[tool.setuptools.packages.find]
-where = ["src"]
+[tool.setuptools]
+package-dir = {"" = "src"}
+py-modules = ["cli", "cookies", "dossier", "marionette", "scraper"]

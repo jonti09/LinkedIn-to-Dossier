@@ -9,8 +9,12 @@ import tempfile
 import time
 from typing import Any, Dict, List, Optional
 
-from .cookies import find_default_firefox_profile, load_cookies_from_sqlite
-from .marionette import MarionetteClient, find_free_port
+try:
+    from .cookies import find_default_firefox_profile, load_cookies_from_sqlite
+    from .marionette import MarionetteClient, find_free_port
+except ImportError:
+    from cookies import find_default_firefox_profile, load_cookies_from_sqlite
+    from marionette import MarionetteClient, find_free_port
 
 
 EXTRACT_JOB_JS = r"""
