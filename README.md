@@ -1,5 +1,8 @@
 # Job Scraper & Dossier Pipeline
 
+> [!WARNING]
+> **Disclaimer**: This project is provided strictly for **educational and personal research purposes**. Automated scraping or data extraction is against [LinkedIn's Terms of Service](https://www.linkedin.com/legal/user-agreement). Use this tool responsibly and entirely at your own risk; the authors assume no liability for account restrictions or misuse.
+
 Automatically pull your recommended job listings from LinkedIn and prepare AI-tailored **Draft** applications in **Dossier** — complete with tailored resumes, cover letters, and direct links to the application portal.
 
 ## How It Works
