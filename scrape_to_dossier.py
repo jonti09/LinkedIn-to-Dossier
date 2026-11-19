@@ -666,64 +666,147 @@ class DossierClient:
             sys.stderr.write(f"[linkedin-scrapper] Warning fetching applications list: {e}\n")
             return []
 
-    def create_draft_application(self, job: Dict[str, Any]) -> Dict[str, Any]:
-        profile = self.get_candidate_profile()
-
+    def create_draft_application(
+        self,
+        job: Dict[str, Any],
+        wait_for_ai: bool = True,
+        log_fn: Any = None,
+    ) -> Dict[str, Any]:
         # Target job link is actual application link (e.g. Ashby/Greenhouse URL), fallback to posting link
         target_link = job.get("apply") or job.get("postingLink") or ""
         company = job.get("company") or "Unknown Company"
         role = job.get("title") or "Software Engineer"
-        mode = "Remote" if job.get("remote") else ""
+        mode = "Remote" if job.get("remote") else "On-site / Hybrid"
         salary = job.get("salaryRange") or ""
         desc = job.get("description") or ""
+        posting_link = job.get("postingLink") or ""
 
-        # Format resume roles according to candidate's profile
-        roles = []
-        for r in profile.get("experience", []):
-            bullets = r.get("bullets", [])
-            if not bullets:
-                bullets = ["Contributed to software engineering and systems development."]
-            roles.append({
-                "id": r["id"],
-                "bullets": bullets[:5]
-            })
+        header_lines = [
+            f"Company: {company}",
+            f"Role: {role}",
+            f"Work mode: {mode}",
+        ]
+        if salary:
+            header_lines.append(f"Salary: {salary}")
+        if posting_link:
+            header_lines.append(f"LinkedIn Posting: {posting_link}")
+        if job.get("contact"):
+            header_lines.append(f"Recruiter Contact: {job['contact']}")
 
-        app_payload = {
-            "posting_url": target_link,
-            "posting_text": desc,
-            "details": {
-                "company": company,
-                "role": role,
-                "title": f"{role} · {company}",
-                "location": "Remote" if job.get("remote") else "",
-                "mode": mode,
-                "salary": salary,
-                "language": "English"
+        full_posting_text = "\n".join(header_lines) + "\n\n" + desc
+
+        # Use Dossier's built-in AI model (draft_application) so Dossier tailors the resume & cover letter
+        draft_res = self.call_tool(
+            "draft_application",
+            {
+                "posting_url": target_link,
+                "posting_text": full_posting_text,
             },
-            "resume": {
-                "summary": profile.get("summary") or profile.get("headline") or "Software Engineer",
-                "skills": profile.get("skills", ["Software Engineering", "Python"]),
-                "roles": roles
-            },
-            "cover_letter": {
-                "greeting": f"Dear {company} Hiring Team,",
-                "paragraphs": [
-                    {
-                        "text": f"I am writing to express my strong interest in the {role} opportunity at {company}. My background in software engineering and distributed systems aligns closely with the goals of your team."
-                    }
-                ],
-                "sign_off": "Warm regards,"
+        )
+        if not isinstance(draft_res, dict) or not draft_res.get("draft_id"):
+            return draft_res if isinstance(draft_res, dict) else {"raw": draft_res}
+
+        draft_id = draft_res["draft_id"]
+        if not wait_for_ai:
+            return {
+                "draft_id": draft_id,
+                "status": draft_res.get("status", "started"),
             }
+
+        last_step = None
+        for _ in range(90):
+            time.sleep(3.0)
+            chk = self.call_tool("check_draft", {"draft_id": draft_id})
+            if not isinstance(chk, dict):
+                continue
+            status = chk.get("status")
+            step = chk.get("step")
+            if step and step != last_step and log_fn:
+                log_fn(f"      [Dossier AI] {step}...")
+                last_step = step
+            if status == "done":
+                return {
+                    "draft_id": draft_id,
+                    "application_id": chk.get("application_id"),
+                    "link": chk.get("link"),
+                    "status": "Draft",
+                }
+            if status in ("failed", "error"):
+                raise RuntimeError(chk.get("error") or f"Dossier AI draft failed: {chk}")
+
+        return {
+            "draft_id": draft_id,
+            "status": "working",
         }
 
-        res = self.call_tool("save_application", app_payload)
-        return res if isinstance(res, dict) else {"raw": res}
+
+def _normalize_url(u: str) -> str:
+    if not u:
+        return ""
+    u = u.strip()
+    try:
+        parsed = urllib.parse.urlparse(u)
+        # Keep scheme, netloc, and path without trailing slash
+        return f"{parsed.scheme.lower()}://{parsed.netloc.lower()}{parsed.path.rstrip('/')}"
+    except Exception:
+        return u.split("?")[0].rstrip("/").lower()
+
+
+def _extract_linkedin_job_id(u: str) -> Optional[str]:
+    if not u:
+        return None
+    import re
+    m = re.search(r"linkedin\.com/jobs/view/(?:[^/?#]*-)?(\d{6,})", u, re.I)
+    return m.group(1) if m else None
+
+
+def find_existing_application(
+    job: Dict[str, Any],
+    existing_apps: List[Dict[str, Any]],
+) -> Optional[Dict[str, Any]]:
+    """
+    Check if a job listing is already in Dossier (including as a Draft) by matching:
+    1. Exact or normalized `apply` URL or `postingLink` URL
+    2. LinkedIn numeric job ID in the posting URL
+    3. Exact `(company, role)` pair (case-insensitive)
+    """
+    apply_url = (job.get("apply") or "").strip()
+    posting_url = (job.get("postingLink") or "").strip()
+    norm_apply = _normalize_url(apply_url)
+    norm_posting = _normalize_url(posting_url)
+    li_id = _extract_linkedin_job_id(posting_url) or _extract_linkedin_job_id(apply_url)
+
+    job_company = (job.get("company") or "").strip().lower()
+    job_title = (job.get("title") or "").strip().lower()
+
+    for app in existing_apps:
+        app_url = (app.get("posting") or app.get("posting_url") or "").strip()
+        norm_app_url = _normalize_url(app_url)
+        app_li_id = _extract_linkedin_job_id(app_url)
+
+        # 1. URL match
+        if norm_app_url and (norm_app_url == norm_apply or norm_app_url == norm_posting):
+            return app
+
+        # 2. LinkedIn job ID match
+        if li_id and app_li_id and li_id == app_li_id:
+            return app
+
+        # 3. Company + Role match (especially useful when one entry has the LinkedIn URL and another has the external ATS URL)
+        app_company = (app.get("company") or "").strip().lower()
+        app_role = (app.get("role") or "").strip().lower()
+        if job_company and app_company and job_company == app_company:
+            if job_title and app_role and (job_title == app_role or job_title in app_role or app_role in job_title):
+                return app
+
+    return None
 
 
 def sync_jobs_to_dossier(
     jobs: List[Dict[str, Any]],
     force: bool = False,
-    verbose: bool = True
+    wait_for_ai: bool = True,
+    verbose: bool = True,
 ) -> None:
     def log(msg: str) -> None:
         if verbose:
@@ -737,35 +820,49 @@ def sync_jobs_to_dossier(
         return
 
     existing_apps = dossier.list_existing_applications()
-    existing_urls = set()
-    for app in existing_apps:
-        if app.get("posting"):
-            existing_urls.add(app["posting"].strip())
-        if app.get("posting_url"):
-            existing_urls.add(app["posting_url"].strip())
-
-    log(f"Found {len(existing_apps)} existing applications in Dossier.")
+    draft_count = sum(1 for a in existing_apps if (a.get("status") or "").lower() == "draft")
+    log(f"Found {len(existing_apps)} existing applications in Dossier ({draft_count} currently in Draft).")
 
     for idx, job in enumerate(jobs, start=1):
         target_link = (job.get("apply") or job.get("postingLink") or "").strip()
-        posting_link = (job.get("postingLink") or "").strip()
+        matched_app = find_existing_application(job, existing_apps)
 
-        if not force and (target_link in existing_urls or posting_link in existing_urls):
-            log(f"[{idx}/{len(jobs)}] Skipping '{job.get('title')} · {job.get('company')}' (already in Dossier).")
-            job["dossierStatus"] = "already_exists"
+        if not force and matched_app is not None:
+            existing_status = matched_app.get("status", "Draft")
+            existing_id = matched_app.get("id")
+            existing_link = matched_app.get("link")
+            log(
+                f"[{idx}/{len(jobs)}] Skipping '{job.get('title')} · {job.get('company')}' "
+                f"(already in Dossier with status '{existing_status}': {existing_link})"
+            )
+            job["dossierApplicationId"] = existing_id
+            job["dossierUrl"] = existing_link
+            job["dossierStatus"] = f"already_exists ({existing_status})"
             continue
 
-        log(f"[{idx}/{len(jobs)}] Creating Draft application in Dossier for '{job.get('title')} · {job.get('company')}' -> {target_link}")
+        log(f"[{idx}/{len(jobs)}] Requesting Dossier AI to draft application for '{job.get('title')} · {job.get('company')}' -> {target_link}")
         try:
-            res = dossier.create_draft_application(job)
+            res = dossier.create_draft_application(job, wait_for_ai=wait_for_ai, log_fn=log)
             app_id = res.get("application_id")
             link = res.get("link")
+            job["dossierDraftId"] = res.get("draft_id")
             job["dossierApplicationId"] = app_id
             job["dossierUrl"] = link
             job["dossierStatus"] = res.get("status", "Draft")
-            log(f"      -> Created draft: {link}")
-            if target_link:
-                existing_urls.add(target_link)
+            if link:
+                log(f"      -> AI Draft completed: {link}")
+            else:
+                log(f"      -> AI Draft queued (draft_id={res.get('draft_id')}, status={res.get('status')})")
+
+            # Add to in-memory existing_apps list so duplicate listings within the same scrape batch aren't drafted twice
+            existing_apps.append({
+                "id": app_id,
+                "company": job.get("company"),
+                "role": job.get("title"),
+                "status": "Draft",
+                "posting": target_link,
+                "link": link,
+            })
         except Exception as e:
             log(f"      -> Error creating draft in Dossier: {e}")
             job["dossierError"] = str(e)
@@ -834,7 +931,12 @@ def main() -> int:
     parser.add_argument(
         "--force-dossier",
         action="store_true",
-        help="Create applications in Dossier even if the job link is already present",
+        help="Create applications in Dossier even if the job is already present as a draft or sent application",
+    )
+    parser.add_argument(
+        "--no-wait-ai",
+        action="store_true",
+        help="Trigger Dossier AI draft_application without waiting for completion",
     )
     parser.add_argument(
         "--quiet",
@@ -861,6 +963,7 @@ def main() -> int:
         sync_jobs_to_dossier(
             jobs,
             force=args.force_dossier,
+            wait_for_ai=not args.no_wait_ai,
             verbose=not args.quiet,
         )
 

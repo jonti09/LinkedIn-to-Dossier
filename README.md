@@ -8,7 +8,11 @@ A zero-dependency Python 3 tool that scrapes job listings from LinkedIn via Fire
 2. **Find Jobs**: Automatically clicks **"Show all"** on your recommended job collection.
 3. **Scrape Detail**: Extracts the listing title, company, clean description, salary range, remote flag, posting date, recruiter contact URL, and direct application link (resolving external ATS redirects like Ashby, Greenhouse, Lever, etc.).
 4. **Save Scraped Data**: Writes JSON output to `scrapped/<YYYY-MM-DD_HH-MM-SS>.json`.
-5. **Dossier MCP Integration**: Connects to Dossier (`http://localhost:3000/api/mcp`) via its authorized MCP tokens (`~/.mcp-auth/mcp-remote-v1`), fetches your candidate profile, and calls `save_application` to create a **Draft** application in Dossier. The application's link is set directly to the actual application URL (`apply`).
+5. **Dossier MCP Integration**:
+   - Connects to Dossier (`http://localhost:3000/api/mcp`) via its authorized MCP tokens (`~/.mcp-auth/mcp-remote-v1`).
+   - Checks existing Dossier applications (including existing **Draft** entries) by URL, LinkedIn job ID, and company + role to avoid duplicates.
+   - Calls `draft_application` + `check_draft` so **Dossier's own built-in AI** generates the tailored resume, cover letter, and requirement match breakdown.
+   - Sets the application's job link directly to the actual application URL (`apply`).
 
 ## Output Schema
 
