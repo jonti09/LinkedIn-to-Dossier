@@ -1,12 +1,18 @@
-# LinkedIn Jobs Scraper (`linkedin-scrapper`)
+# LinkedIn Jobs Scraper & Dossier Pipeline (`scrape_to_dossier.py`)
 
-A zero-dependency Python 3 script that opens Firefox via its built-in Marionette protocol, reuses your logged-in LinkedIn cookies from your local Firefox profile (`cookies.sqlite`) or an exported cookies JSON file, navigates to `https://www.linkedin.com/jobs/`, clicks **"Show all"**, and extracts full details for each job listing on the subsequent page.
+A zero-dependency Python 3 tool that scrapes job listings from LinkedIn via Firefox and automatically creates **Draft** applications in **Dossier** via MCP with job links pointing to the actual application URLs.
+
+## Workflow
+
+1. **Firefox Automation**: Opens `https://www.linkedin.com/jobs/` using cookies from your local Firefox profile (`cookies.sqlite`) or a cookies JSON file.
+2. **Find Jobs**: Automatically clicks **"Show all"** on your recommended job collection.
+3. **Scrape Detail**: Extracts the listing title, company, clean description, salary range, remote flag, posting date, recruiter contact URL, and direct application link (resolving external ATS redirects like Ashby, Greenhouse, Lever, etc.).
+4. **Save Scraped Data**: Writes JSON output to `scrapped/<YYYY-MM-DD_HH-MM-SS>.json`.
+5. **Dossier MCP Integration**: Connects to Dossier (`http://localhost:3000/api/mcp`) via its authorized MCP tokens (`~/.mcp-auth/mcp-remote-v1`), fetches your candidate profile, and calls `save_application` to create a **Draft** application in Dossier. The application's link is set directly to the actual application URL (`apply`).
 
 ## Output Schema
 
-By default, each run automatically saves the output to `scrapped/linked-in/<YYYY-MM-DD_HH-MM-SS>.json` (relative to the project root, or configurable with `-o`).
-
-The script outputs a JSON array where each element has the following shape:
+Each scraped job produces an object structured as follows:
 
 ```json
 {
@@ -18,32 +24,30 @@ The script outputs a JSON array where each element has the following shape:
   "company": "The Upstarts Club",
   "datePosted": "1 week ago",
   "contact": "https://www.linkedin.com/in/steve-di-piazza-0bb55b6b/",
-  "apply": "https://www.linkedin.com/jobs/view/4489115739/"
+  "apply": "https://jobs.ashbyhq.com/example/job",
+  "dossierApplicationId": "cmwnkcc0s007201qtblbap47k",
+  "dossierUrl": "http://127.0.0.1:3000/applications/cmwnkcc0s007201qtblbap47k",
+  "dossierStatus": "Draft"
 }
 ```
-
-- `apply` is the unwrapped external job portal URL (when the listing links out to an external ATS like Ashby, Greenhouse, Lever, Workday, etc.) or the internal LinkedIn job URL (`https://www.linkedin.com/jobs/view/<jobId>/`) for Easy Apply / internal listings.
-- Fields like `salaryRange` and `contact` are set to `null` if not provided on the listing.
 
 ## Usage
 
 ```bash
-# Run in headless mode by default (saves to scrapped/linked-in/<date-time>.json automatically)
-./scraper.py
+cd /home/saber/Projects/Job/linkedin-scrapper
 
-# Run with a visible Firefox GUI window
-./scraper.py --no-headless
+# Scrape and create draft applications in Dossier (headless by default)
+./scrape_to_dossier.py
 
-# Scrape only the first 5 listings on the subsequent page
-./scraper.py --limit 5
+# Scrape only first 3 listings
+./scrape_to_dossier.py --limit 3
 
-# Click the second "Show all" section on https://www.linkedin.com/jobs/
-./scraper.py --show-all-index 1
+# Run with visible Firefox GUI window
+./scrape_to_dossier.py --no-headless
 
-# Explicitly specify a custom output file path
-./scraper.py -o scrapped/linked-in/custom.json
+# Only scrape to scrapped/<date-time>.json without creating applications in Dossier
+./scrape_to_dossier.py --no-dossier
 
-# Explicitly specify a Firefox profile directory or a cookies.json file
-./scraper.py --profile ~/.config/mozilla/firefox/0csfnlo2.default-release
-./scraper.py --cookies cookies.json
+# Custom output file path
+./scrape_to_dossier.py -o scrapped/custom_run.json
 ```
