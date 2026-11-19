@@ -12,8 +12,32 @@ Automatically pull your recommended job listings from LinkedIn and prepare AI-ta
 ## Prerequisites
 
 - **Firefox** installed locally with an active LinkedIn login session.
-- **Dossier** running locally at `http://localhost:3000` with MCP authorized (`npx -y mcp-remote http://localhost:3000/api/mcp 9696`).
+- **Dossier** running locally (default: `http://localhost:3000`).
+- **Node.js / `npx`** (used once to perform the initial OAuth handshake with Dossier via `mcp-remote`).
 - **[uv](https://docs.astral.sh/uv/)** (or Python 3.9+).
+
+## Setting Up the Dossier MCP Connection (First-Time Setup)
+
+Dossier uses OAuth 2.0 to authorize MCP clients. On a brand-new setup, follow these steps once to link this tool to your Dossier instance:
+
+1. **Start Dossier & Sign In**:
+   Make sure Dossier is running (e.g. `docker compose up -d`) and sign in to the Dossier web UI at `http://localhost:3000` in your browser.
+2. **Configure Your Profile & AI Provider in Dossier**:
+   - Ensure you have created at least one candidate profile in Dossier (your experience, skills, and summary are used when tailoring resumes).
+   - In Dossier's **Settings → AI**, configure an AI provider (such as a local Ollama model or an API key) so Dossier can automatically draft tailored resumes and cover letters.
+3. **Enable the MCP Connector in Dossier**:
+   - In Dossier, go to **Settings → Connector / MCP** (or open the connector prompt) and enable MCP access.
+   - If prompted for an allowed callback/redirect port, allow `http://localhost:9696/oauth/callback` (port `9696`).
+4. **Authorize via `mcp-remote`**:
+   Run the following command in your terminal:
+   ```bash
+   npx -y mcp-remote http://localhost:3000/api/mcp 9696
+   ```
+   - This opens a browser tab asking you to approve the connection in Dossier.
+   - Click **Approve / Connect**.
+   - `mcp-remote` will save the OAuth client metadata and tokens inside `~/.mcp-auth/mcp-remote-v1/`. Once authorized, you can press `Ctrl+C` to exit `mcp-remote`.
+5. **Ready to Run**:
+   From now on, this pipeline automatically reads your tokens from `~/.mcp-auth/mcp-remote-v1/` and refreshes them via `http://localhost:3000/api/oauth/token` whenever they expire — no manual re-authentication needed.
 
 ## Quick Start
 
