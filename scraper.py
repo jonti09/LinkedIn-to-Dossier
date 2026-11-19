@@ -8,7 +8,7 @@ section, and scrapes detailed information from every job listing on the
 subsequent page into JSON:
 
 {
-  "jobId": "https://www.linkedin.com/jobs/view/<id>",
+  "postingLink": "https://www.linkedin.com/jobs/view/<id>",
   "title": "...",
   "description": "...",
   "salaryRange": "... (or null)",
@@ -320,7 +320,7 @@ if (extAnchor && extAnchor.href) {
 }
 
 return {
-  jobId: `https://www.linkedin.com/jobs/view/${jobId}`,
+  postingLink: `https://www.linkedin.com/jobs/view/${jobId}`,
   title,
   description,
   salaryRange,

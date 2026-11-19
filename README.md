@@ -10,7 +10,7 @@ The script outputs a JSON array where each element has the following shape:
 
 ```json
 {
-  "jobId": "https://www.linkedin.com/jobs/view/4489115739",
+  "postingLink": "https://www.linkedin.com/jobs/view/4489115739",
   "title": "Senior Software Engineer – Agentic Development",
   "description": "Full job description text...",
   "salaryRange": "115K GBP/yr - 145K GBP/yr",
