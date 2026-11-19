@@ -4,6 +4,8 @@ A zero-dependency Python 3 script that opens Firefox via its built-in Marionette
 
 ## Output Schema
 
+By default, each run automatically saves the output to `scrapped/linked-in/<YYYY-MM-DD_HH-MM-SS>.json` (relative to the project root, or configurable with `-o`).
+
 The script outputs a JSON array where each element has the following shape:
 
 ```json
@@ -15,26 +17,31 @@ The script outputs a JSON array where each element has the following shape:
   "remote": true,
   "company": "The Upstarts Club",
   "datePosted": "1 week ago",
-  "contact": "https://www.linkedin.com/in/steve-di-piazza-0bb55b6b/"
+  "contact": "https://www.linkedin.com/in/steve-di-piazza-0bb55b6b/",
+  "apply": "https://www.linkedin.com/jobs/view/4489115739/"
 }
 ```
 
-*(Fields like `salaryRange` and `contact` are set to `null` if not provided on the listing.)*
+- `apply` is the unwrapped external job portal URL (when the listing links out to an external ATS like Ashby, Greenhouse, Lever, Workday, etc.) or the internal LinkedIn job URL (`https://www.linkedin.com/jobs/view/<jobId>/`) for Easy Apply / internal listings.
+- Fields like `salaryRange` and `contact` are set to `null` if not provided on the listing.
 
 ## Usage
 
 ```bash
-# Run with visible Firefox window (auto-detects your default Firefox profile cookies)
+# Run with visible Firefox window (saves to scrapped/linked-in/<date-time>.json automatically)
 ./scraper.py
 
-# Run in headless mode and save output to jobs.json
-./scraper.py --headless -o jobs.json
+# Run in headless mode (saves to scrapped/linked-in/<date-time>.json automatically)
+./scraper.py --headless
 
 # Scrape only the first 5 listings on the subsequent page
 ./scraper.py --limit 5
 
 # Click the second "Show all" section on https://www.linkedin.com/jobs/
 ./scraper.py --show-all-index 1
+
+# Explicitly specify a custom output file path
+./scraper.py --headless -o scrapped/linked-in/custom.json
 
 # Explicitly specify a Firefox profile directory or a cookies.json file
 ./scraper.py --profile ~/.config/mozilla/firefox/0csfnlo2.default-release

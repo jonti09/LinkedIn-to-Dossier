@@ -15,12 +15,14 @@ subsequent page into JSON:
   "remote": true/false,
   "company": "...",
   "datePosted": "...",
-  "contact": "https://www.linkedin.com/in/... (or null)"
+  "contact": "https://www.linkedin.com/in/... (or null)",
+  "apply": "https://... (external job portal URL or internal LinkedIn job URL)"
 }
 """
 
 import argparse
 import configparser
+from datetime import datetime
 import glob
 import json
 import os
@@ -285,6 +287,38 @@ if (dmDetail) {
   if (dmCard) datePosted = dmCard[1].trim();
 }
 
+// 10. Apply link (external job portal link if available, or internal LinkedIn apply/job view link)
+let apply = `https://www.linkedin.com/jobs/view/${jobId}/`;
+const applyAnchors = Array.from(detailCol.querySelectorAll('a[href]'));
+const extAnchor = applyAnchors.find(a => {
+  const txt = (a.innerText || a.textContent || '').trim();
+  const aria = a.getAttribute('aria-label') || '';
+  const href = a.getAttribute('href') || '';
+  return /^apply$/i.test(txt) || /apply/i.test(aria) || href.includes('/safety/go/');
+});
+if (extAnchor && extAnchor.href) {
+  let rawHref = extAnchor.href;
+  try {
+    const parsed = new URL(rawHref, window.location.origin);
+    if (parsed.pathname.includes('/safety/go') && parsed.searchParams.get('url')) {
+      apply = parsed.searchParams.get('url');
+    } else if (!parsed.pathname.startsWith('/jobs/search-results')) {
+      apply = parsed.href;
+    }
+  } catch (e) {
+    apply = rawHref;
+  }
+} else {
+  const easyApplyAnchor = applyAnchors.find(a => {
+    const txt = (a.innerText || a.textContent || '').trim();
+    const href = a.getAttribute('href') || '';
+    return /easy apply/i.test(txt) || href.includes('/apply/');
+  });
+  if (easyApplyAnchor && easyApplyAnchor.href && !easyApplyAnchor.href.includes('/jobs/search-results')) {
+    apply = easyApplyAnchor.href;
+  }
+}
+
 return {
   jobId,
   title,
@@ -293,7 +327,8 @@ return {
   remote,
   company,
   datePosted,
-  contact
+  contact,
+  apply
 };
 """
 
@@ -570,7 +605,7 @@ def main() -> int:
         "--output",
         "-o",
         default=None,
-        help="Write JSON output to file instead of only stdout",
+        help="Output JSON file path (default: scrapped/linked-in/<YYYY-MM-DD_HH-MM-SS>.json)",
     )
     parser.add_argument(
         "--quiet",
@@ -593,11 +628,18 @@ def main() -> int:
     )
 
     formatted = json.dumps(jobs, indent=2, ensure_ascii=False)
-    if args.output:
-        with open(args.output, "w", encoding="utf-8") as f:
-            f.write(formatted + "\n")
-        if not args.quiet:
-            sys.stderr.write(f"[linkedin-scrapper] Saved {len(jobs)} jobs to {args.output}\n")
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    default_out = os.path.join(script_dir, "scrapped", "linked-in", f"{timestamp}.json")
+    output_path = args.output if args.output else default_out
+
+    out_dir = os.path.dirname(os.path.abspath(output_path))
+    if out_dir:
+        os.makedirs(out_dir, exist_ok=True)
+    with open(output_path, "w", encoding="utf-8") as f:
+        f.write(formatted + "\n")
+    if not args.quiet:
+        sys.stderr.write(f"[linkedin-scrapper] Saved {len(jobs)} jobs to {output_path}\n")
     print(formatted)
     return 0
 
