@@ -2,6 +2,7 @@
 
 import json
 import os
+import random
 import re
 import shutil
 import subprocess
@@ -261,6 +262,8 @@ def scrape_linkedin_jobs(
     limit: Optional[int] = None,
     min_salary: Optional[float] = None,
     show_all_index: int = 0,
+    min_delay: float = 5.0,
+    max_delay: float = 10.0,
     verbose: bool = True,
 ) -> List[Dict[str, Any]]:
     """Open Firefox with cookies, click 'Show all', and scrape each listing on the subsequent page."""
@@ -424,6 +427,11 @@ def scrape_linkedin_jobs(
 
         results: List[Dict[str, Any]] = []
         for idx, jid in enumerate(job_ids, start=1):
+            if idx > 1 and max_delay > 0:
+                delay = random.uniform(min_delay, max(min_delay, max_delay))
+                log(f"Rate-limiting: sleeping {delay:.1f}s before fetching next listing...")
+                time.sleep(delay)
+
             log(f"[{idx}/{len(job_ids)}] Selecting job {jid}...")
             client.execute_script(
                 """
