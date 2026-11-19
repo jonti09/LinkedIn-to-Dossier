@@ -120,6 +120,14 @@ def main() -> int:
         if min_salary_val is None:
             parser.error(f"Invalid --min-salary value: {args.min_salary!r} (expected number like 90000 or 90k)")
 
+    project_root = get_project_root()
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    default_out = args.from_json if args.from_json else os.path.join(project_root, "scrapped", f"{timestamp}.json")
+    output_path = args.output if args.output else default_out
+    out_dir = os.path.dirname(os.path.abspath(output_path))
+    if out_dir:
+        os.makedirs(out_dir, exist_ok=True)
+
     if args.from_json:
         if not os.path.exists(args.from_json):
             parser.error(f"Input JSON file not found: {args.from_json}")
@@ -128,12 +136,13 @@ def main() -> int:
         with open(args.from_json, "r", encoding="utf-8") as f:
             loaded = json.load(f)
         if isinstance(loaded, dict):
-            jobs = [loaded]
+            all_jobs = [loaded]
         elif isinstance(loaded, list):
-            jobs = loaded
+            all_jobs = loaded
         else:
             parser.error(f"Expected JSON array or object in {args.from_json}")
 
+        jobs = all_jobs
         if min_salary_val is not None:
             filtered = []
             for j in jobs:
@@ -151,7 +160,7 @@ def main() -> int:
         if args.limit and args.limit > 0:
             jobs = jobs[:args.limit]
     else:
-        jobs = scrape_linkedin_jobs(
+        all_jobs = scrape_linkedin_jobs(
             url=args.url,
             profile_dir=args.profile,
             cookies_file=args.cookies,
@@ -161,6 +170,14 @@ def main() -> int:
             show_all_index=args.show_all_index,
             verbose=not args.quiet,
         )
+        jobs = all_jobs
+
+    def save_current_state() -> None:
+        with open(output_path, "w", encoding="utf-8") as f:
+            f.write(json.dumps(all_jobs, indent=2, ensure_ascii=False) + "\n")
+
+    # Save immediately before starting Dossier sync so scraped listings are persisted on disk right away
+    save_current_state()
 
     if not args.no_dossier:
         sync_jobs_to_dossier(
@@ -169,21 +186,13 @@ def main() -> int:
             force=args.force_dossier,
             wait_for_ai=not args.no_wait_ai,
             verbose=not args.quiet,
+            on_progress=save_current_state,
         )
 
-    formatted = json.dumps(jobs, indent=2, ensure_ascii=False)
-    project_root = get_project_root()
-    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    default_out = args.from_json if args.from_json else os.path.join(project_root, "scrapped", f"{timestamp}.json")
-    output_path = args.output if args.output else default_out
-
-    out_dir = os.path.dirname(os.path.abspath(output_path))
-    if out_dir:
-        os.makedirs(out_dir, exist_ok=True)
-    with open(output_path, "w", encoding="utf-8") as f:
-        f.write(formatted + "\n")
+    save_current_state()
+    formatted = json.dumps(all_jobs, indent=2, ensure_ascii=False)
     if not args.quiet:
-        sys.stderr.write(f"[linkedin-scrapper] Saved {len(jobs)} jobs to {output_path}\n")
+        sys.stderr.write(f"[linkedin-scrapper] Saved {len(all_jobs)} jobs to {output_path}\n")
 
     print(formatted)
     return 0

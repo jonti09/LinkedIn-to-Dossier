@@ -269,11 +269,19 @@ def sync_jobs_to_dossier(
     force: bool = False,
     wait_for_ai: bool = True,
     verbose: bool = True,
+    on_progress: Any = None,
 ) -> None:
     def log(msg: str) -> None:
         if verbose:
             sys.stderr.write(f"[dossier-sync] {msg}\n")
             sys.stderr.flush()
+
+    def notify_progress() -> None:
+        if callable(on_progress):
+            try:
+                on_progress()
+            except Exception as e:
+                log(f"Warning saving incremental progress: {e}")
 
     try:
         dossier = DossierClient(base_url=dossier_url)
@@ -287,20 +295,26 @@ def sync_jobs_to_dossier(
 
     for idx, job in enumerate(jobs, start=1):
         target_link = (job.get("apply") or job.get("postingLink") or "").strip()
+
+        # If this job entry in a --from-json file already succeeded earlier and is still in Dossier, skip cleanly
         matched_app = find_existing_application(job, existing_apps)
 
         if not force and matched_app is not None:
             existing_status = matched_app.get("status", "Draft")
             existing_id = matched_app.get("id")
             existing_link = dossier.format_app_link(matched_app.get("link"), existing_id)
+            had_error = "dossierError" in job
+            job.pop("dossierError", None)
+            job["dossierApplicationId"] = existing_id
+            job["dossierUrl"] = existing_link
+            if job.get("dossierStatus") not in ("Draft", "Sent", "Interview"):
+                job["dossierStatus"] = f"already_exists ({existing_status})"
             log(
                 f"[{idx}/{len(jobs)}] Skipping '{job.get('title')} · {job.get('company')}' "
                 f"(already in Dossier with status '{existing_status}': {existing_link})"
             )
-            job.pop("dossierError", None)
-            job["dossierApplicationId"] = existing_id
-            job["dossierUrl"] = existing_link
-            job["dossierStatus"] = f"already_exists ({existing_status})"
+            if had_error:
+                notify_progress()
             continue
 
         log(f"[{idx}/{len(jobs)}] Requesting Dossier AI to draft application for '{job.get('title')} · {job.get('company')}' -> {target_link}")
@@ -326,6 +340,8 @@ def sync_jobs_to_dossier(
                 "posting": target_link,
                 "link": link,
             })
+            notify_progress()
         except Exception as e:
             log(f"      -> Error creating draft in Dossier: {e}")
             job["dossierError"] = str(e)
+            notify_progress()
