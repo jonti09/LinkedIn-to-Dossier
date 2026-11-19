@@ -16,8 +16,8 @@ class DossierClient:
 
     def __init__(
         self,
-        mcp_url: str = "http://127.0.0.1:3000/api/mcp",
-        token_url: str = "http://127.0.0.1:3000/api/oauth/token",
+        mcp_url: str = "http://localhost:3000/api/mcp",
+        token_url: str = "http://localhost:3000/api/oauth/token",
     ):
         self.mcp_url = mcp_url
         self.token_url = token_url
@@ -167,10 +167,13 @@ class DossierClient:
                 log_fn(f"      [Dossier AI] {step}...")
                 last_step = step
             if status == "done":
+                link = chk.get("link")
+                if isinstance(link, str):
+                    link = link.replace("http://127.0.0.1:3000", "http://localhost:3000")
                 return {
                     "draft_id": draft_id,
                     "application_id": chk.get("application_id"),
-                    "link": chk.get("link"),
+                    "link": link,
                     "status": "Draft",
                 }
             if status in ("failed", "error"):
@@ -268,6 +271,8 @@ def sync_jobs_to_dossier(
             existing_status = matched_app.get("status", "Draft")
             existing_id = matched_app.get("id")
             existing_link = matched_app.get("link")
+            if isinstance(existing_link, str):
+                existing_link = existing_link.replace("http://127.0.0.1:3000", "http://localhost:3000")
             log(
                 f"[{idx}/{len(jobs)}] Skipping '{job.get('title')} · {job.get('company')}' "
                 f"(already in Dossier with status '{existing_status}': {existing_link})"

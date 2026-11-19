@@ -36,18 +36,18 @@ Each scraped job produces an object structured as follows:
 
 ```json
 {
-  "postingLink": "https://www.linkedin.com/jobs/view/4489115739",
-  "title": "Senior Software Engineer – Agentic Development",
+  "postingLink": "https://www.linkedin.com/jobs/view/1234567890",
+  "title": "Senior Software Engineer",
   "description": "Full job description text...",
-  "salaryRange": "115K GBP/yr - 145K GBP/yr",
+  "salaryRange": "100K GBP/yr - 130K GBP/yr",
   "remote": true,
-  "company": "The Upstarts Club",
+  "company": "Acme Corp",
   "datePosted": "1 week ago",
-  "contact": "https://www.linkedin.com/in/steve-di-piazza-0bb55b6b/",
-  "apply": "https://jobs.ashbyhq.com/example/job",
-  "dossierDraftId": "cmwnn5wma008301qt99pp6ttp",
-  "dossierApplicationId": "cmwnkcc0s007201qtblbap47k",
-  "dossierUrl": "http://127.0.0.1:3000/applications/cmwnkcc0s007201qtblbap47k",
+  "contact": "https://www.linkedin.com/in/example-recruiter/",
+  "apply": "https://jobs.example.com/acme/senior-software-engineer",
+  "dossierDraftId": "draft_example_123",
+  "dossierApplicationId": "app_example_456",
+  "dossierUrl": "http://localhost:3000/applications/app_example_456",
   "dossierStatus": "Draft"
 }
 ```
