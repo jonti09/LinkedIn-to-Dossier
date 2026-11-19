@@ -55,17 +55,19 @@ Each scraped job produces an object structured as follows:
 ## Usage
 
 ```bash
-# Run directly
-python3 src/cli.py
+# Run via uv (either command alias or script path)
+uv run scrape-to-dossier
 # or
-python3 src
+uv run scrape
+# or
+uv run src/cli.py
 
 # Scrape only first 3 listings
-python3 src/cli.py --limit 3
+uv run scrape-to-dossier --limit 3
 
 # Run with visible Firefox GUI window
-python3 src/cli.py --no-headless
+uv run scrape-to-dossier --no-headless
 
 # Only scrape to scrapped/<date-time>.json without creating applications in Dossier
-python3 src/cli.py --no-dossier
+uv run scrape-to-dossier --no-dossier
 ```
