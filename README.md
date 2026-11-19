@@ -38,3 +38,12 @@ uv run scrape --limit 3
 | `--no-headless` | Open a visible Firefox window to watch the browser while it scrapes. |
 | `-o, --output <path>` | Save the JSON output to a custom file path. |
 | `-q, --quiet` | Hide progress logs and only print the final JSON output. |
+
+## Acknowledgements
+
+Special thanks to [**Dossier**](https://github.com/AienTech/dossier/) for providing a fantastic self-hosted job search and AI application management platform with built-in MCP support.
+
+## License
+
+This project is licensed under the [MIT License](LICENSE).
+

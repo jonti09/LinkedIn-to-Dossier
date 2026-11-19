@@ -7,6 +7,7 @@ name = "job-dossier-pipeline"
 version = "0.1.0"
 description = "Scrape job listings via Firefox and create AI-tailored Draft applications in Dossier via MCP."
 readme = "README.md"
+license = { file = "LICENSE" }
 requires-python = ">=3.9"
 dependencies = []
 
