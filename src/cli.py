@@ -2,15 +2,16 @@
 """CLI entry point for job scraping & Dossier draft application pipeline."""
 
 import argparse
-from datetime import datetime
 import json
 import os
 import sys
 
 try:
+    from .db import JobStore, default_db_path, extract_job_id as extract_id
     from .dossier import sync_jobs_to_dossier
     from .scraper import extract_min_posted_salary, meets_min_salary, parse_salary_amount, scrape_linkedin_jobs
 except ImportError:
+    from db import JobStore, default_db_path, extract_job_id as extract_id
     from dossier import sync_jobs_to_dossier
     from scraper import extract_min_posted_salary, meets_min_salary, parse_salary_amount, scrape_linkedin_jobs
 
@@ -71,18 +72,22 @@ def main() -> int:
         help="Which 'Show all' section button to click (0 = first section, 1 = second section, etc.)",
     )
     parser.add_argument(
+        "--db",
+        default=None,
+        help="SQLite database path (default: data/jobs.sqlite in the project)",
+    )
+    parser.add_argument(
         "--from-json",
         "--input",
         "-i",
         dest="from_json",
         default=None,
-        help="Path to an existing scraped JSON file to sync/retry adding into Dossier without re-scraping Firefox",
+        help="Import listings from a legacy scraped JSON file into the database instead of scraping",
     )
     parser.add_argument(
-        "--output",
-        "-o",
-        default=None,
-        help="Output JSON file path (default: scrapped/<YYYY-MM-DD_HH-MM-SS>.json, or updates the --from-json file in-place)",
+        "--from-db",
+        action="store_true",
+        help="Skip scraping; sync jobs already in the database that are not yet in Dossier",
     )
     parser.add_argument(
         "--dossier-url",
@@ -121,46 +126,45 @@ def main() -> int:
             parser.error(f"Invalid --min-salary value: {args.min_salary!r} (expected number like 90000 or 90k)")
 
     project_root = get_project_root()
-    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    default_out = args.from_json if args.from_json else os.path.join(project_root, "scrapped", f"{timestamp}.json")
-    output_path = args.output if args.output else default_out
-    out_dir = os.path.dirname(os.path.abspath(output_path))
-    if out_dir:
-        os.makedirs(out_dir, exist_ok=True)
+    store = JobStore(args.db or default_db_path(project_root))
+
+    def log(msg: str) -> None:
+        if not args.quiet:
+            sys.stderr.write(f"[linkedin-scrapper] {msg}\n")
+
+    def salary_ok(j: dict) -> bool:
+        if min_salary_val is None:
+            return True
+        sal = j.get("salaryRange")
+        if meets_min_salary(sal, min_salary_val):
+            return True
+        p_min = extract_min_posted_salary(sal)
+        log(
+            f"Filtering out '{j.get('title')} · {j.get('company')}' "
+            f"(posted salary '{sal}' [min={p_min:g}] < {min_salary_val:g})"
+        )
+        return False
 
     if args.from_json:
         if not os.path.exists(args.from_json):
             parser.error(f"Input JSON file not found: {args.from_json}")
-        if not args.quiet:
-            sys.stderr.write(f"[linkedin-scrapper] Loading scraped listings from {args.from_json}...\n")
         with open(args.from_json, "r", encoding="utf-8") as f:
             loaded = json.load(f)
         if isinstance(loaded, dict):
-            all_jobs = [loaded]
-        elif isinstance(loaded, list):
-            all_jobs = loaded
-        else:
+            loaded = [loaded]
+        if not isinstance(loaded, list):
             parser.error(f"Expected JSON array or object in {args.from_json}")
-
-        jobs = all_jobs
-        if min_salary_val is not None:
-            filtered = []
-            for j in jobs:
-                sal = j.get("salaryRange")
-                if meets_min_salary(sal, min_salary_val):
-                    filtered.append(j)
-                elif not args.quiet:
-                    p_min = extract_min_posted_salary(sal)
-                    sys.stderr.write(
-                        f"[linkedin-scrapper] Filtering out '{j.get('title')} · {j.get('company')}' "
-                        f"(posted salary '{sal}' [min={p_min:g}] < {min_salary_val:g})\n"
-                    )
-            jobs = filtered
-
-        if args.limit and args.limit > 0:
-            jobs = jobs[:args.limit]
+        loaded = [j for j in loaded if salary_ok(j)]
+        added = store.add_scraped(loaded)
+        for j in loaded:  # carry over Dossier metadata from the legacy file for new rows
+            if extract_id(j) in added:
+                store.save_dossier(j)
+        log(f"Imported {len(added)} new jobs from {args.from_json} ({len(loaded) - len(added)} already in DB).")
+        jobs = store.pending_jobs()
+    elif args.from_db:
+        jobs = [j for j in store.pending_jobs() if salary_ok(j)]
     else:
-        all_jobs = scrape_linkedin_jobs(
+        scraped = scrape_linkedin_jobs(
             url=args.url,
             profile_dir=args.profile,
             cookies_file=args.cookies,
@@ -169,32 +173,37 @@ def main() -> int:
             min_salary=min_salary_val,
             show_all_index=args.show_all_index,
             verbose=not args.quiet,
+            known_ids=store.known_ids(),
         )
-        jobs = all_jobs
+        added = store.add_scraped(scraped)
+        log(f"Stored {len(added)} new jobs in {store.path} ({len(scraped) - len(added)} duplicates ignored).")
+        # Failed/unsynced jobs from earlier runs are retried too
+        jobs = store.pending_jobs()
+
+    if args.limit and args.limit > 0 and (args.from_json or args.from_db):
+        jobs = jobs[: args.limit]
 
     def save_current_state() -> None:
-        with open(output_path, "w", encoding="utf-8") as f:
-            f.write(json.dumps(all_jobs, indent=2, ensure_ascii=False) + "\n")
-
-    # Save immediately before starting Dossier sync so scraped listings are persisted on disk right away
-    save_current_state()
+        for j in jobs:
+            store.save_dossier(j)
 
     if not args.no_dossier:
+        # Only jobs the DB says haven't been pushed to Dossier are sent (unless --force-dossier)
+        to_sync = jobs
         sync_jobs_to_dossier(
-            jobs,
+            to_sync,
             dossier_url=args.dossier_url,
             force=args.force_dossier,
             wait_for_ai=not args.no_wait_ai,
             verbose=not args.quiet,
             on_progress=save_current_state,
         )
+        jobs = to_sync
+        save_current_state()
 
-    save_current_state()
-    formatted = json.dumps(all_jobs, indent=2, ensure_ascii=False)
-    if not args.quiet:
-        sys.stderr.write(f"[linkedin-scrapper] Saved {len(all_jobs)} jobs to {output_path}\n")
-
-    print(formatted)
+    log(f"Database: {store.path}")
+    print(json.dumps(jobs, indent=2, ensure_ascii=False))
+    store.close()
     return 0
 
 

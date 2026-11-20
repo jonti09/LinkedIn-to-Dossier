@@ -10,7 +10,7 @@ Automatically pull your recommended job listings from LinkedIn and prepare AI-ta
 1. **Uses Your Existing Firefox Login**: Reads your LinkedIn session directly from your local Firefox profile so you don't have to manage credentials or log in manually.
 2. **Collects Recommended Listings**: Opens LinkedIn Jobs in headless Firefox, clicks **"Show all"**, and extracts full job descriptions, salary ranges, remote status, recruiter profiles, and direct application links (unwrapping external portals like Greenhouse, Ashby, Lever, and Workday).
 3. **Drafts Applications in Dossier**: Connects to your local Dossier instance (`http://localhost:3000`), skips jobs you've already drafted or applied to, and triggers Dossier's AI to prepare a tailored resume and cover letter for each new role.
-4. **Saves a Local Snapshot**: Writes the scraped listings and their Dossier links to `scrapped/<YYYY-MM-DD_HH-MM-SS>.json`.
+4. **Saves a Local Snapshot**: Stores listings and Dossier metadata in a SQLite DB at `data/jobs.sqlite`, keyed by LinkedIn job ID (duplicates are never re-scraped or re-sent to Dossier).
 
 ## Prerequisites
 
@@ -51,24 +51,28 @@ uv run scrape
 # Test with the first 3 listings only
 uv run scrape --limit 3
 
-# Safely re-run / retry failed Dossier drafts from an existing scraped JSON file
-uv run scrape --from-json scrapped/2026-11-19_16-13-10.json
+# Retry jobs in the DB that are not yet in Dossier (no scraping)
+uv run scrape --from-db
+
+# Import a legacy scraped JSON file into the DB
+uv run scrape --from-json path/to/old.json
 ```
 
 ## Common Options
 
 | Flag | Description |
 | :--- | :--- |
-| `-i, --from-json <path>` | Load listings from an existing scraped JSON file and add any missing/failed entries to Dossier without re-scraping Firefox. |
+| `--from-db` | Skip scraping; sync DB jobs not yet in Dossier. |
+| `-i, --from-json <path>` | Import a legacy JSON file into the DB. |
+| `--db <path>` | SQLite path (default `data/jobs.sqlite`). |
 | `--limit <N>` | Only process the first `N` listings on the page. |
 | `--min-salary <X>` | Only include postings where the lower bound `P` of the posted salary range `P - Q` is `>= X` (e.g. `100000` or `100k`). Postings without a listed salary are kept. |
 | `--show-all-index <N>` | Choose which "Show all" section on LinkedIn Jobs to open (`0` = first section, `1` = second, etc.). |
 | `--dossier-url <url>` | Override the Dossier base URL (default: `localhost:3000`). |
-| `--no-dossier` | Only scrape listings to `scrapped/<date-time>.json` without creating drafts in Dossier. |
+| `--no-dossier` | Only scrape listings to the database without creating drafts in Dossier. |
 | `--no-wait-ai` | Queue AI drafts in Dossier and exit immediately without waiting for generation to finish. |
 | `--force-dossier` | Create a new draft in Dossier even if the job already exists. |
 | `--no-headless` | Open a visible Firefox window to watch the browser while it scrapes. |
-| `-o, --output <path>` | Save the JSON output to a custom file path. |
 | `-q, --quiet` | Hide progress logs and only print the final JSON output. |
 
 ## Acknowledgements

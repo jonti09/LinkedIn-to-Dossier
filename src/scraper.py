@@ -9,7 +9,7 @@ import subprocess
 import sys
 import tempfile
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set
 
 try:
     from .cookies import find_default_firefox_profile, load_cookies_from_sqlite
@@ -265,6 +265,7 @@ def scrape_linkedin_jobs(
     min_delay: float = 5.0,
     max_delay: float = 10.0,
     verbose: bool = True,
+    known_ids: Optional[Set[str]] = None,
 ) -> List[Dict[str, Any]]:
     """Open Firefox with cookies, click 'Show all', and scrape each listing on the subsequent page."""
 
@@ -420,10 +421,16 @@ def scrape_linkedin_jobs(
             """
         ) or []
 
+        if known_ids:
+            skipped = [j for j in job_ids if j in known_ids]
+            job_ids = [j for j in job_ids if j not in known_ids]
+            if skipped:
+                log(f"Skipping {len(skipped)} listings already stored in the database.")
+
         if limit and limit > 0:
             job_ids = job_ids[:limit]
 
-        log(f"Found {len(job_ids)} job listings on the subsequent page.")
+        log(f"Found {len(job_ids)} new job listings on the subsequent page.")
 
         results: List[Dict[str, Any]] = []
         for idx, jid in enumerate(job_ids, start=1):

@@ -21,6 +21,7 @@ All source modules live directly under `src/` (flat module layout configured in 
     ├── __main__.py     # Entry point (`python3 src` or `python3 -m src`)
     ├── cli.py          # CLI argument parsing and workflow orchestration
     ├── cookies.py      # Firefox profile discovery and SQLite cookie loader
+    ├── db.py           # SQLite job store (data/jobs.sqlite) with Dossier sync metadata
     ├── dossier.py      # Dossier MCP client, duplicate checking, and AI draft creation
     ├── marionette.py   # Pure-Python Firefox Marionette client
     └── scraper.py      # Job board browser navigation and DOM extraction
@@ -28,7 +29,8 @@ All source modules live directly under `src/` (flat module layout configured in 
 
 ### Module Responsibilities
 
-- `src/cli.py`: CLI entry point, argument parsing, orchestration, and saving output to `scrapped/<YYYY-MM-DD_HH-MM-SS>.json`.
+- `src/cli.py`: CLI entry point, argument parsing, orchestration, and persisting results to SQLite via `JobStore`.
+- `src/db.py`: `JobStore` over `data/jobs.sqlite` (override with `--db`). Table `jobs` is keyed by the LinkedIn numeric job ID (primary key) and stores scraped fields plus Dossier metadata (`dossier_draft_id`, `dossier_application_id`, `dossier_url`, `dossier_status`, `dossier_error`, `dossier_synced_at`). New rows use `INSERT OR IGNORE`; existing rows are never overwritten by scrapes.
 - `src/cookies.py`: Auto-detects the default Firefox profile (`~/.config/mozilla/firefox` or `~/.mozilla/firefox`) and reads `cookies.sqlite` (including WAL/SHM files) in a temporary directory to avoid SQLite database locks while Firefox is open.
 - `src/marionette.py`: Zero-dependency pure-Python client for Firefox's built-in Marionette protocol (`--marionette`).
 - `src/scraper.py`: Launches headless Firefox with profile cookies, opens `https://www.linkedin.com/jobs/`, clicks `"Show all"`, scrolls and selects each job card (`[role="button"][componentkey^="job-card-component-ref-"]`) on the subsequent page, expands truncated descriptions, extracts all job fields, and optionally filters listings via `--min-salary <X>` (requiring lower bound `P >= X` when a salary range `P - Q` is posted, while keeping listings with no posted salary).
@@ -40,10 +42,11 @@ All source modules live directly under `src/` (flat module layout configured in 
 
 ## Output JSON Schema
 
-Each item written to `scrapped/<YYYY-MM-DD_HH-MM-SS>.json` (and printed to stdout) follows this schema:
+Jobs are stored in SQLite (`data/jobs.sqlite`). Jobs processed in a run are also printed to stdout as JSON, each item following this schema (`jobId` is the LinkedIn job ID / primary key):
 
 ```json
 {
+  "jobId": "1234567890",
   "postingLink": "https://www.linkedin.com/jobs/view/1234567890",
   "title": "Senior Software Engineer",
   "description": "Full job description text...",
@@ -78,8 +81,11 @@ uv run src/cli.py
 # Test with a small limit
 uv run scrape --limit 3
 
-# Re-sync an existing scraped JSON file to Dossier (skips already-added drafts and retries failed entries)
-uv run scrape --from-json scrapped/<YYYY-MM-DD_HH-MM-SS>.json
+# Sync jobs already in the DB that aren't in Dossier yet (no scraping; retries failed entries)
+uv run scrape --from-db
+
+# Import a legacy scraped JSON file into the DB
+uv run scrape --from-json path/to/old.json
 
 # Scrape only (skip Dossier MCP sync)
 uv run scrape --no-dossier
@@ -95,8 +101,8 @@ uv run scrape --no-headless
 
 1. **Zero External Runtime Dependencies**: Keep the package self-contained using Python's standard library (`urllib.request`, `sqlite3`, `socket`, `subprocess`, `json`, `argparse`) and system `firefox`. Do not add heavy browser wrappers unless explicitly requested.
 2. **Dossier AI Drafting**: Always use Dossier's `draft_application` + `check_draft` MCP tools when creating new drafts so Dossier's own AI model generates the tailored resume and cover letter.
-3. **Deduplication First**: Always check `find_existing_application()` against `list_applications` (including existing `Draft` items) before triggering `draft_application`, unless `--force-dossier` is explicitly passed.
+3. **Deduplication First**: The LinkedIn job ID (SQLite primary key) is the source of truth: the scraper skips IDs already in the DB and only jobs without a Dossier draft/application ID are synced. Additionally, always check `find_existing_application()` against `list_applications` (including existing `Draft` items) before triggering `draft_application`, unless `--force-dossier` is explicitly passed.
 4. **Privacy & Security**:
-   - Never commit cookies (`cookies.json`, `*.sqlite*`), OAuth tokens, or scraped outputs (`scrapped/`).
+   - Never commit cookies (`cookies.json`, `*.sqlite*`), OAuth tokens, or the scraped database (`data/`, `*.sqlite*`).
    - Never put personal user information, real recruiter profile links, or private tokens in `README.md` or committed documentation.
    - Always use `http://localhost:3000` (not `127.0.0.1:3000`) for user-facing `dossierUrl` fields.
